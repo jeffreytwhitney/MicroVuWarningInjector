@@ -1,7 +1,6 @@
 import os
 import re
 from pathlib import Path
-from typing import List
 
 import lib.Utilities
 from lib.Utilities import get_utf_encoded_file_lines
@@ -20,12 +19,6 @@ class MicroVuException(Exception):
 
 class MicroVuProgram:
     _filepath: str
-    _has_calculators: bool
-    _is_smartprofile: bool
-    _op_num: str
-    _rev_num: str
-    _smartprofile_projectname: str
-    _manual_dimension_names: List[DimensionName] = []
 
     # Static Methods
     @staticmethod
@@ -56,12 +49,9 @@ class MicroVuProgram:
         return line_text.replace(current_node, new_node)
 
     # Dunder Methods
-    def __init__(self, input_filepath: str, op_num: str, rev_num: str, smartprofile_projectname: str):
+    def __init__(self, input_filepath: str):
         self._filepath = input_filepath
         self.file_lines = get_utf_encoded_file_lines(self._filepath)
-        self._op_num = op_num.upper()
-        self._rev_num = rev_num.upper()
-        self._smartprofile_projectname = smartprofile_projectname
         self._postinit()
 
     # Internal Methods
@@ -107,13 +97,13 @@ class MicroVuProgram:
     def bring_part_to_metrology_index(self) -> int:
         idx = next(
                 (i for i, l in enumerate(self.file_lines)
-                 if "Bring part to Metrology.JPG" in l), -1
+                 if "Bring Part To Metrology 1Factory.jpg" in l), -1
         )
         if idx > -1:
             return idx
 
-        kill_file_idx = self.kill_file_call_index
-        return -1 if kill_file_idx == -1 else kill_file_idx + 3
+        instructions_index = self.instructions_index
+        return -1 if instructions_index == -1 else instructions_index + 1
 
     @property
     def can_write_to_output_file(self) -> bool:
@@ -141,24 +131,6 @@ class MicroVuProgram:
                 else:
                     new_line = f'{self.file_lines[line_idx][:-2]} (Txt \"{value}\")\n'
                 self.file_lines[line_idx] = new_line
-
-    @property
-    def dimension_names(self) -> list[DimensionName]:
-        if self.is_smartprofile:
-            return []
-        if self._manual_dimension_names:
-            return self._manual_dimension_names
-        dimensions: list[DimensionName] = []
-        for i, line in enumerate(self.file_lines):
-            if line.find("(PropLabels ") > -1:
-                if line.startswith("Calc"):
-                    continue
-                if line.startswith("Prmt"):
-                    continue
-                old_dimension_name = MicroVuProgram.get_node_text(line, "(Name ", "\"")
-                dimension = DimensionName(i, old_dimension_name)
-                dimensions.append(dimension)
-        return dimensions
 
     @property
     def export_filepath(self) -> str:
@@ -216,6 +188,10 @@ class MicroVuProgram:
         return "(AutoRptFileName" in line
 
     @property
+    def has_been_converted(self) -> bool:
+        return any("(Name \"SEQUENCE\")" in line for line in self.file_lines)
+
+    @property
     def get_existing_smartprofile_call_index(self) -> int:
         return self.get_index_containing_text("SmartProfile.exe")
 
@@ -229,7 +205,7 @@ class MicroVuProgram:
 
     @property
     def has_bring_to_metrology_picture(self) -> bool:
-        return any("Bring part to Metrology.JPG" in line for line in self.file_lines)
+        return any("Bring Part To Metrology 1Factory.jpg" in line for line in self.file_lines)
 
     @property
     def kill_file_call_index(self) -> int:
@@ -245,18 +221,6 @@ class MicroVuProgram:
             return MicroVuProgram.get_node_text(last_system_reference_line, "Sys 1", " ")
         else:
             return MicroVuProgram.get_node_text(last_system_reference_line, "(Sys", " ", ")")
-
-    @property
-    def manual_dimension_names(self) -> List[DimensionName]:
-        return self._manual_dimension_names
-
-    @manual_dimension_names.setter
-    def manual_dimension_names(self, names: List[DimensionName]):
-        self._manual_dimension_names = names
-
-    @property
-    def op_number(self) -> str:
-        return self._op_num
 
     @property
     def output_directory(self) -> str:
@@ -295,56 +259,6 @@ class MicroVuProgram:
             return MicroVuProgram.get_node_text(self.file_lines[line_idx], "AutoRptFileName", "\"")
         else:
             return ""
-
-    @report_filepath.setter
-    def report_filepath(self, value: str) -> None:
-        if self.is_smartprofile:
-            value = ""
-
-        if self.has_auto_report:
-            line_idx = self.get_index_containing_text("AutoRptFileName")
-            if not line_idx:
-                return
-            line_text = self.file_lines[line_idx]
-            if self.is_smartprofile:
-                updated_line_text = MicroVuProgram.set_node_text(line_text, "(AutoRptFileName ", "", "\"")
-            else:
-                updated_line_text = MicroVuProgram.set_node_text(line_text, "(AutoRptFileName ", value, "\"")
-            self.file_lines[line_idx] = updated_line_text
-        else:
-            if line_idx := self.get_index_containing_text("AutoExpFile"):
-                line = self.file_lines[line_idx][:-2]
-                if "(AutoRptSortInstructionsByName" not in line:
-                    line += " (AutoRptSortInstructionsByName 0)"
-                else:
-                    existing_node = MicroVuProgram.get_node(line, "AutoRptSortInstructionsByName")
-                    line = line.replace(existing_node, "(AutoRptSortInstructionsByName 0)")
-
-                if "(AutoRptTemplateName" not in line:
-                    line += " (AutoRptTemplateName \"Classic\")"
-                else:
-                    existing_node = MicroVuProgram.get_node(line, "AutoRptTemplateName")
-                    line = line.replace(existing_node, "(AutoRptTemplateName \"Classic\")")
-
-                if "(AutoRptAppendDateAndTime" not in line:
-                    line += " (AutoRptAppendDateAndTime 1)"
-                else:
-                    existing_node = MicroVuProgram.get_node(line, "AutoRptAppendDateAndTime")
-                    line = line.replace(existing_node, "(AutoRptAppendDateAndTime 1)")
-                line += f" (AutoRptFileName \"{value}\")\n"
-                self.file_lines[line_idx] = line
-
-    @property
-    def rev_number(self) -> str:
-        return self._rev_num
-
-    @property
-    def smartprofile_call_insertion_index(self) -> int:
-        return len(self.file_lines) if self.is_smartprofile else -1
-
-    @property
-    def smartprofile_projectname(self) -> str:
-        return self._smartprofile_projectname
 
     @property
     def view_name(self) -> str:
