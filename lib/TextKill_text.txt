@@ -1,0 +1,4 @@
+
+CmdLn 1 1F19EBC0 (Name "TEXT KILL") (OutRej 0 0.005000 0.005000 3.000000 3.000000 1.000000 1.000000 100.000000 100.000000 0 0 3) (CmdText """C:\killFile.bat""") (Wait 0)
+Constraints 1
+CmdCon 0 CB95640

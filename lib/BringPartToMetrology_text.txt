@@ -1,0 +1,4 @@
+
+CmdLn 1 25A5C9E0 (Name "BRING PART TO METROLOGY") (OutRej 0 0.005000 0.005000 3.000000 3.000000 1.000000 1.000000 100.000000 100.000000 0 0 3) (CmdText """V:\Inspect Programs\Micro-Vu\Approved Programs\MicroVu\Microvu Setup Pics\Bring part to Metrology.JPG""") (Wait 0)
+Constraints 1
+CmdCon 0 1665B940
